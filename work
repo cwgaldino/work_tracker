@@ -1,0 +1,880 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+# standard imports
+import time
+import sys
+import subprocess
+import os
+
+from curses import wrapper
+
+# backpack
+# import sys
+# sys.path.append('/home/galdino/github/py-backpack')
+# import backpack.filemanip as fm
+# from backpack.intermanip import makeSound
+
+from calendar import monthrange, month_name
+import numpy as np
+import shutil
+import datetime
+from pathlib import Path
+import warnings
+
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.dates as mdates
+    import matplotlib.dates as dates
+    from detect_delimiter import detect
+    import json
+except ModuleNotFoundError:
+    pass
+
+
+    # if filepath is None:
+    #     folder = Path('~/.work').expanduser()
+    # else:
+    #     folder = Path(folder).expanduser()
+    # if folder.is_dir():
+    #     pass
+    # else:
+    #     folder.mkdir()
+    #     print(f'Folder created: {folder}')
+    #
+    # if filepath is None:
+    #     folder = Path('~/.work').expanduser()
+    #     filepath = folder/f'work_{year}.log'
+
+def new_logfile(filepath=None, year=None):
+    """Creates empty log file."""
+    if year is None:
+        now = datetime.datetime.now()
+        year = now.year
+
+    if filepath is None:
+        filepath = Path(f'~/.work/work_{year}.log').expanduser()
+
+    filepath = Path(filepath)
+    file = filepath.open('w+')
+
+    file.write(f'# {year}\n')
+    for month in np.arange(0+1, 12+1, 1):
+        num_days = monthrange(year, month)[1]
+        month_s = f'{month}'.zfill(2)
+        #print(num_days)
+
+        file.write(f'# {month_name[int(month_s)]} ' + '='*20 + '\n')
+        for day in np.arange(0+1, num_days+1, 1):
+            day_s = f'{day}'.zfill(2)
+            file.write(f'{day_s}-{month_s}\n')
+
+    file.close()
+
+def get_year(filepath):
+    """Get year from log file."""
+    filepath = Path(filepath)
+    with filepath.open() as f: year = f.readline()[2:6]
+    return int(year)
+
+def date2line(day=None, month=None, year=None):
+    """Return the line number related to a date."""
+    now = datetime.datetime.now()
+    if day is None:
+        day = now.day
+    if month is None:
+        month = now.month
+    if year is None:
+        year = now.year
+
+    d0 = datetime.date(year, 1, 1)
+    d1 = datetime.date(year, month, day)
+    delta = d1 - d0
+    return delta.days + month +1
+
+def get_line(filepath, day, month):
+    """Get data from a line."""
+    # row number
+    line_number = date2line(day, month, year=get_year(filepath))
+
+    # open file
+    file = open(filepath, 'r')
+    for i, line in enumerate(file):
+        if i == line_number:
+            line2use = line.split('\n')[0][5:].strip()
+        elif i > line_number:
+            break
+    return line2use
+
+
+def new_settings_file(filepath=None):
+    if filepath is None:
+        folder = Path('~/.work').expanduser()
+        filepath = folder/f'work_settings.txt'
+
+    settings = dict(default_timer = 40,
+                    string_type = 'hour:min',
+                    default_file = str(Path('~/.work').expanduser()/f'work_{datetime.datetime.now().year}.log')
+                    )
+    _save_obj(settings, filepath)
+
+def load_settings(filepath=None):
+    if filepath is None:
+        folder = Path('~/.work').expanduser()
+        filepath = folder/f'work_settings.txt'
+
+    return _load_obj(filepath)
+
+
+
+
+# def start(minutes_set=None, filepath=None):
+#
+#     settings = load_settings()
+#
+#     now = datetime.datetime.now()
+#     day = now.day
+#     month = now.month
+#     year = now.year
+#
+#     if filepath is None:
+#         filepath = Path(f'~/.work/work_{year}.log').expanduser()
+#
+#     if minutes_set is None:
+#         minutes_set = settings['default_timer']
+#     else:
+#         minutes_set = int(minutes_set)
+#     target = prettify(sec2time(minutes_set*60))
+#
+#     # initializing timer
+#     timer_start = time.time()
+#     time_start = time.strftime("%H%M", time.localtime())
+#     string2show = '00:00:00'
+#
+#     try:
+#         pairs, e, s = work_summary(day=day, month=month, year=year, filepath=filepath)
+#     except FileNotFoundError:
+#         new_logfile(year=year)
+#         pairs, e, s = work_summary(day=day, month=month, year=year, filepath=filepath)
+#
+#     sys.stdout.write("======== Work session =======\n")
+#     sys.stdout.write(f"min:                {prettify(s[1])}\n")
+#     sys.stdout.write(f"max:                {prettify(s[2])}\n")
+#     sys.stdout.write(f"average:            {prettify(s[3])}\n")
+#     sys.stdout.write(f"total:              {prettify(s[4])}\n\n")
+#     sys.stdout.write(f"Session number: {s[0]+1}\n")
+#     timer_flag = False
+#     # minutes = 59
+#     try:
+#         while True:
+#             sys.stdout.write("\rTimer: {string2show} (target: {target}) >>> Press Esc to stop...".format(string2show=string2show, target=target))
+#             sys.stdout.flush()
+#             time.sleep(1)
+#             seconds = int(time.time() - timer_start)
+#             string2show = prettify(sec2time(seconds), show_seconds=True)
+#
+#             if seconds >= minutes_set*60 and timer_flag == False:
+#                 makeSound(duration=1, freq=440)
+#                 time.sleep(1)
+#                 makeSound(duration=1, freq=440)
+#                 timer_flag = True
+#     except KeyboardInterrupt:
+#         pass
+#
+#     sys.stdout.write(f'\n\n======== End of session ========\n')
+#
+#     time_end = time.strftime("%H%M", time.localtime())
+#     sys.stdout.write(f'Session started at: {prettify(time_start)}\n')
+#     sys.stdout.write(f'Session ended at: {prettify(time_end)}\n')
+#     sys.stdout.write(f'Session lenght: {string2show[:-2]}\n')
+#
+#     append_session(start=time_start, end=time_end, day=day, month=month, year=year, filepath=filepath)
+#     sys.stdout.write(f'Session saved at: {filepath}\n')
+#
+#     pairs, e, s = work_summary(day=day, month=month, year=year, filepath=filepath)
+#     sys.stdout.write(f"min:                {prettify(s[1])}\n")
+#     sys.stdout.write(f"max:                {prettify(s[2])}\n")
+#     sys.stdout.write(f"average:            {prettify(s[3])}\n")
+#     sys.stdout.write(f"total:              {prettify(s[4])}\n\n")
+
+def summary(mode='work', day=None, month=None, filepath=None):
+    now = datetime.datetime.now()
+    if day is None:
+        day = now.day
+    if month is None:
+        month = now.month
+
+
+    if filepath is None:
+        year = datetime.datetime.now().year
+        filepath = Path(f'~/.work/work_{year}.log').expanduser()
+
+    data = get_line(day=day, month=month, filepath=filepath).split()
+
+    if mode == 'work': pairs = [list(x) for x in zip(data[::2], data[1::2])]
+    else: pairs = [list(x) for x in zip(data[1:-1:2], data[2:-1:2])]
+
+    # ellapsed time
+    e = [0]*len(pairs)
+    for i, pair in enumerate(pairs):
+        e[i] = elapsed_time(pair[0], pair[-1])
+    e_sec = [time2sec(x) for x in e]
+    if e_sec == []:
+        e_sec = [0]
+
+    s = [len(pairs),
+         sec2time(min(e_sec)),
+         sec2time(max(e_sec)),
+         sec2time(int(np.mean(e_sec))),
+         sec2time(sum(e_sec))
+        ]
+    return  pairs, e, s
+
+def append(l, day=None, month=None, filepath=None):
+
+    for pair in l:
+        start = pair[0]
+        end = pair[1]
+        append_session(start=start, end=end, day=day, month=month, filepath=filepath)
+
+def append_session(start, end, day=None, month=None, filepath=None):
+
+    now = datetime.datetime.now()
+    if day is None:
+        day = now.day
+    if month is None:
+        month = now.month
+
+    if filepath is None:
+        year = now.year
+        filepath = Path(f'~/.work').expanduser()/f'work_{year}.log'
+    else:
+        filepath = Path(filepath)
+        year = get_year(filepath)
+
+    line_number = date2line(day=day, month=month, year=year)
+
+    # backup
+    shutil.copy(filepath, filepath.parent/(filepath.name+'_safe'))
+
+    # open file
+    with filepath.open() as file:
+        lines = file.readlines()
+        if('\r\n' in lines[line_number]):
+            lines[line_number] = lines[line_number][:-2] + f' {start} {end}\r\n'
+        else:
+            lines[line_number] = lines[line_number][:-1] + f' {start} {end}\n'
+
+    with filepath.open('w') as file:
+        file.writelines(lines)
+
+
+# plt.ion()
+def report(filepath=None):
+    show_rest = False
+    now = datetime.datetime.now()
+    month_now = now.month
+    day_now = now.day
+
+
+    if filepath is None:
+        year = datetime.datetime.now().year
+        filepath = Path(f'~/.work/work_{year}.log').expanduser()
+    else:
+        filepath = Path(filepath)
+        year = get_year(filepath)
+
+    work = []
+    rest = []
+    total = []
+    date = []
+    for month in np.arange(0+1, month_now+1, 1):
+        month_s = f'{month}'.zfill(2)
+
+        if month == month_now:
+            num_days = day_now
+        else:
+            num_days = monthrange(year, month)[1]
+        for day in np.arange(0+1, num_days+1, 1):
+            day_s = f'{day}'.zfill(2)
+            date.append(f'{month_s}/{day_s}/{year}')
+
+    for d in date:
+        day = int(d.split('/')[1])
+        month = int(d.split('/')[0])
+        pairs, e, s = summary(day=day, month=month, filepath=filepath)
+        work.append(time2hour(s[4]))
+        pairs, e, s = summary(mode='rest', day=day, month=month, filepath=filepath)
+        rest.append(time2hour(s[4]))
+
+    # if work les than 5 min, counts as day not worked
+    for i in range(len(work)):
+        if work[i]<0.1:
+            work[i] = 0
+            rest[i] = 0
+
+    # average
+    avg = np.mean([w for w in work if w!=0])
+    days_not_worked = len([w for w in work if w==0])
+    weekend_days = int(len(work)/7)*2
+    weekend_normalization = days_not_worked-weekend_days
+    avg_normalized = np.sum([w for w in work if w!=0])/(len(work)+weekend_normalization)
+    avg_target =     ((365-365/7*2)*6 - sum(work))/((365-365/7*2)-len(work))
+    avg_target2 =     ((365-365/7*2)*6 - sum(work))/((365-365/7)-len(work))
+
+    print(f'average               {round(avg, 1)}')
+    print(f'days_not_worked       {days_not_worked}')
+    print(f'weekend_days          {weekend_days}')
+    print(f'weekend_normalization {weekend_normalization}')
+    print(f'avg_normalized        {round(avg_normalized, 1)}')
+    print(f'avg target (5 days)   {round(avg_target, 1)}')
+    print(f'avg target (6 days)   {round(avg_target2, 1)}')
+
+
+    try:
+        # plt.hlines(avg_normalized, dates.datestr2num(date[0]), dates.datestr2num(date[-1]), linestyle='--', color='red', label=f'average ({round(avg, 1)})')
+        plt.hlines(avg_normalized, dates.datestr2num(date[0]), dates.datestr2num(date[-1]), linestyle='--', color='black', label=f'average normalized ({round(avg_normalized, 1)})')
+
+        # find first monday
+        for i in range(len(date)):
+            day = int(date[i].split('/')[1])
+            month = int(date[i].split('/')[0])
+            if datetime.datetime(year, month, day).weekday() == 0:
+                break
+        vlines = [dates.datestr2num(d) for d in date[i::7]]
+
+        if show_rest:
+            plt.vlines(vlines, 0, max(np.array(work)+np.array(rest))+max(np.array(work)+np.array(rest))*0.1, linestyle='-', linewidth=0.5, alpha=0.5, color='black')
+        else:
+            plt.vlines(vlines, 0, max(work)+max(work)*0.1, linestyle='-', linewidth=0.5, alpha=0.5, color='black')
+
+        # for i in range(len(date)):
+        #     if work[i]==0: print(date[i])
+        date2 = dates.datestr2num(date) # where date is '01/02/1991'
+        plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d-%m'))
+        # plt.gca().xaxis.set_major_locator(mdates.DayLocator(interval=7))
+        plt.gca().xaxis.set_minor_locator(mdates.DayLocator(interval=1))
+        plt.gca().xaxis.set_ticks([dates.datestr2num(d) for d in date[::10]])
+
+        plt.bar(date2, work, width=1, label='Work')
+        if show_rest:
+            plt.bar(date2, rest, bottom=work, width=1, label='Rest')
+
+        plt.xlim(left=dates.datestr2num(date[0]))
+        plt.ylabel('hours')
+        plt.xlabel('day')
+        plt.title(f'{year} [days: {len(work)}, weekend days: {weekend_days}, not worked: {days_not_worked}]')
+        plt.gcf().autofmt_xdate()
+        plt.legend()
+        plt.show()
+    except NameError:
+        print('Skipping ploting since matplotlib was not found.')
+
+
+
+
+
+def timer(*args):
+    time_start = time.time()
+    seconds_set = time2sec(*args)
+
+    while True:
+        try:
+            seconds = int(time.time() - time_start)
+            hours2show, minutes2how, seconds2show = sec2time(seconds)
+            sys.stdout.write("\r{hours} Hours {minutes} Minutes {seconds} Seconds".format(hours= hours2show, minutes=minutes2how, seconds=seconds2show))
+            sys.stdout.flush()
+            time.sleep(1)
+            if seconds >= seconds_set:
+                _makeSound(duration=1, freq=440)
+                time.sleep(1)
+                _makeSound(duration=1, freq=440)
+                break
+        except KeyboardInterrupt as e:
+            break
+
+def elapsed_time(init, final):
+    """returns the elapsed time.
+
+    init and final can be a string or a tuple.
+
+    If init or final is a number it is assumed it is in minutes
+
+    if final is smaller than init, the return hours will have a minus sign.
+    """
+    init = _args2time(init)
+    final = _args2time(final)
+    return sec2time(time2sec(final) - time2sec(init))
+
+def prettify(*args, show_seconds=False):
+    hours, minutes, seconds = _args2time(*args)
+    hours = str(hours).zfill(2)
+    minutes = str(minutes).zfill(2)
+    seconds = str(seconds).zfill(2)
+    if show_seconds:
+        return f'{hours}:{minutes}:{seconds}'
+    else:
+        return f'{hours}:{minutes}'
+
+def sec2time(seconds):
+    hours = seconds//(60*60)
+    minutes = seconds%(60*60)//60
+    seconds = seconds%(60*60)%60
+    return hours, minutes, seconds
+
+def time2sec(*args):
+    hours, minutes, seconds = _args2time(*args)
+    return int(hours*60*60+minutes*60+seconds)
+
+def time2hour(*args):
+    hours, minutes, seconds = _args2time(*args)
+    return hours+minutes/60+seconds/60/60
+
+def string2time(s):
+    """Deals with different time string.
+
+    '9'      -->> hours=0, minutes=9, seconds=0
+    '39'     -->> hours=0, minutes=39, seconds=0
+
+    '939'    -->> hours=9, minutes=39, seconds=0
+    '0939'   -->> hours=9, minutes=39, seconds=0
+    '93912'  -->> hours=9, minutes=39, seconds=12
+    '093912' -->> hours=9, minutes=39, seconds=12
+
+    strings with ':'
+    '9:39'     -->> hours=9, minutes=39, seconds=0
+    '09:39'    -->> hours=9, minutes=39, seconds=0
+    '9:39:12'  -->> hours=9, minutes=39, seconds=12
+    '09:39:12' -->> hours=9, minutes=39, seconds=12
+    """
+    if type(s) == str:
+        if ':' not in s:
+            if len(s) == 1 or len(s) == 2:
+                s = f'0:{s}:0'
+            elif len(s) == 3:
+                s = f'{s[0]}:{s[1:]}:0'
+            elif len(s) == 4:
+                s = f'{s[:2]}:{s[2:]}:0'
+            elif len(s) == 5:
+                s = f'{s[0]}:{s[1:]}:{s[3:]}'
+            elif len(s) == 6:
+                s = f'{s[:2]}:{s[2:]}:{s[4:]}'
+        parts = [int(x) for x in s.split(':')]
+        if len(parts) == 2:
+            return parts[0], parts[1], 0
+        elif len(parts) == 3:
+            return parts[0], parts[1], parts[2]
+        else:
+            raise ValueError('String not in a recognized pattern.')
+    else:
+        raise TypeError('Argument must be a string.')
+
+def _args2time(*args):
+    """Deals with different time inputs.
+
+    args = '93912'      -->> see string2time
+    args = (39)         -->> hours=0, minutes=39, seconds=0
+    args = (9, 39)      -->> hours=9, minutes=39, seconds=0
+    args = (9, 39, 12)  -->> hours=9, minutes=39, seconds=12
+    args = 39           -->> hours=0, minutes=39, seconds=0
+    args = 93912        -->> hours=0, minutes=93912, seconds=0
+    args = 9, 39        -->> hours=9, minutes=39, seconds=0
+    args = 9, 39, 12    -->> hours=9, minutes=39, seconds=12
+    """
+
+    if len(args) == 0:
+        raise ValueError("Missing arguments.")
+    elif len(args) == 1:
+        if type(args[0]) == str:
+            hours, minutes, seconds = string2time(args[0])
+        elif type(args[0]) == int or type(args[0]) == float:
+            hours   = 0
+            minutes = args[0]
+            seconds = 0
+        else:
+            if len(args[0]) == 1:
+                hours   = 0
+                minutes = args[0][0]
+                seconds = 0
+            else:
+                hours   = args[0][0]
+                minutes = args[0][1]
+            try:
+                seconds = args[0][2]
+            except IndexError:
+                seconds = 0
+    elif len(args) == 2:
+        hours = args[0]
+        minutes = args[1]
+        seconds = 0
+    elif len(args) == 3:
+        hours = args[0]
+        minutes = args[1]
+        seconds = args[2]
+    else:
+        warnings.warn(f'Wrong input: {args}')
+    return hours, minutes, seconds
+
+
+class missingStartEndTime(Exception):
+    """Base class for exceptions in this module."""
+    pass
+
+
+def _save_obj(obj, filepath='./Untitled.txt', checkOverwrite=False, prettyPrint=True):
+    """Save object (array, dictionary, list, etc...) to a txt file.
+
+    Args:
+        obj (object): object to be saved.
+        filepath (str or pathlib.Path, optional): path to save file.
+        checkOverwrite (bool, optional): if True, it will check if file exists
+            and ask if user want to overwrite file.
+
+    See Also:
+        :py:func:`_load_obj`
+    """
+    filepath = Path(filepath)
+
+    if checkOverwrite:
+        if filepath.exists() == True:
+            if filepath.is_file() == True:
+                if query_yes_no('File already exists!! Do you wish to ovewrite it?', 'yes') == True:
+                    pass
+                else:
+                    warnings.warn('File not saved because user did not allow overwriting.')
+                    return
+            else:
+                warnings.warn('filepath is pointing to a folder. Saving file as Untitled.txt')
+                filepath = filepath/'Untitled.txt'
+
+    with open(str(filepath), 'w') as file:
+        if prettyPrint:
+            file.write(json.dumps(obj, indent=4, sort_keys=False))
+        else:
+            file.write(json.dumps(obj))
+
+
+def _to_int(obj):
+    """Change keys of a dictionary from string to int when possible."""
+    for key in list(obj.keys()):
+        try:
+            if float(key).is_integer():
+                new_key = int(float(key))
+        except:
+            new_key = key
+        if new_key != key:
+            obj[new_key] = obj[key]
+            del obj[key]
+    return obj
+
+
+def _load_obj(filepath, dict_keys_to_int=False):
+    """Load object (array, dictionary, list, etc...) from a txt file.
+
+    Args:
+        filepath (str or pathlib.Path): file path to load.
+        dict_keys_to_int (bool, optional): If True, it will change ALL
+            numeric dict keys (even for key in nested dictionarys to int, e.g.,
+            dictObject["0.0"] will turn into dictObject[0].
+
+    Returns:
+        object.
+
+    See Also:
+        :py:func:`_save_obj`
+    """
+    filepath = Path(filepath)
+
+    with open(str(filepath), 'r') as file:
+        if dict_keys_to_int:
+            obj = json.load(file, object_hook=_to_int)
+        else:
+            obj = json.load(file)
+    return obj
+
+
+try:
+    import winsound
+except ModuleNotFoundError:
+    pass
+
+
+def _makeSound(duration=1, freq=440):
+    """Make a sound.
+
+    On linux (tested on ubuntu) it uses sox (``sudo apt install sox``).
+    On windows it uses the python package winsound (``pip install winsound``).
+
+    Args:
+        duration (int, optional): duration in seconds.
+        freq (int, optional): frequence of sound in Hertz
+    """
+    uname = sys.platform.lower()
+    if os.name == 'nt':
+        uname = 'win'
+    if uname.startswith('linux'):
+        uname = 'linux'
+
+    duration = duration*1000  # milliseconds
+    freq = 440  # Hz
+
+    if uname == 'win':
+        try: winsound.Beep(freq, duration)
+        except: warnings.warn('Cannot generate sound.')
+    else:
+        try: os.system('play -nq -t alsa synth {} sine {}'.format(duration/1000, freq))
+        except: warnings.warn('Cannot generate sound.')
+
+
+def _sayOutLoud(message):
+    """Generate speech like sounds.
+
+    On Linux (tested only on ubuntu 18.04) speech-dispatcher package is necessary
+    (``sudo apt-get install -y speech-dispatcher``).
+
+    Args:
+        message (str): message to be said out loud.
+    """
+    os.system('spd-say "' + str(message) + '"')
+
+
+
+# main()
+
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        # APPEND ===========================================================================================
+        if sys.argv[1] == 'append' or sys.argv[1] == '--append' or sys.argv[1] == '-a':
+            parts = sys.argv[2:]
+            args2pass = dict(day=None, month=None, filepath=None, l=None)
+            for key in ['day', 'month']:
+                try:
+                    i = parts.index(f'-{key[0]}')
+                    parts.pop(i)
+                    args2pass[key] = int(parts.pop(i))
+                except ValueError: pass
+            try:
+                i = parts.index(f'-f')
+                parts.pop(i)
+                args2pass[key] = Path(parts.pop(i))
+            except ValueError: pass
+            try:
+                i = parts.index(f'-l')
+                parts.pop(i)
+                if len(parts)%2 != 0: raise missingStartEndTime('It appears there is a missing start/end time.')
+                else: args2pass['l'] = list(zip(*(iter(parts),) * 2))
+            except ValueError:
+                if len(parts)%2 != 0: raise missingStartEndTime('It appears there is a missing start/end time.')
+                else: args2pass['l'] = list(zip(*(iter(parts),) * 2))
+            append(**args2pass)
+
+        # log ===========================================================================================
+        elif sys.argv[1] == 'log':
+            now = datetime.datetime.now()
+            day = now.day
+            month = now.month
+            year = now.year
+
+            folder = Path('~/.work').expanduser()
+            filepath = folder/f'work_{year}.log'
+            subprocess.run(["gedit", f"{filepath}", f"+{get_line_number(day, month, year)+1}"])
+
+        # help ===========================================================================================
+        elif sys.argv[1] == 'help' or sys.argv[1] == '--help' or sys.argv[1] == '-h':
+                instructions = 'Usage: work [OPTIONS] [ACTION]\n'
+                instructions += 'Work.'
+                instructions += '\n\n'
+                instructions += 'Options'
+                instructions += '-f, --file    select file (work log)\n'
+                instructions += '-d, --day     select day\n'
+                instructions += '-m, --month   select month\n'
+                # instructions += '-y, --year    select year\n'
+                instructions += '-l, --list    list of start/end pairs\n'
+
+
+                instructions += 'Actions\n'
+                instructions += '-h, --help    display this help and exit\n'
+                instructions += '-a, --append    select file (work log)\n'
+
+                print(instructions)
+
+
+        # status ===========================================================================================
+        elif sys.argv[1] == 'today':
+            now = datetime.datetime.now()
+            try: day   = int(sys.argv[2])
+            except: day = now.day
+            try: month = int(sys.argv[3])
+            except: month = now.month
+            try: year  = int(sys.argv[4])
+            except: year = now.year
+
+            filepath = None
+            if filepath is None:
+                folder = Path('~/.work').expanduser()
+                filepath = folder/f'work_{year}.log'
+
+            try:
+                pairs, e, s = summary(day=day, month=month, filepath=filepath)
+            except FileNotFoundError:
+                build_logfile(folder=None, year=year)
+                pairs, e, s = summary(day=day, month=month, filepath=filepath)
+
+            _, e2, s2 = summary(mode='rest', day=day, month=month, filepath=filepath)
+
+
+            sys.stdout.write(f"======== {day}/{month}/{year} ========\n")
+            sys.stdout.write(f"min:                {prettify(s[1])}\n")
+            sys.stdout.write(f"max:                {prettify(s[2])}\n")
+            sys.stdout.write(f"average:            {prettify(s[3])}\n")
+            sys.stdout.write(f"total:              {prettify(s[4])}\n")
+            sys.stdout.write(f"Number of sessions: {s[0]}\n\n")
+
+            sys.stdout.write("========== Rests ==========\n")
+            sys.stdout.write(f"min:                {prettify(s2[1])}\n")
+            sys.stdout.write(f"max:                {prettify(s2[2])}\n")
+            sys.stdout.write(f"average:            {prettify(s2[3])}\n")
+            sys.stdout.write(f"total:              {prettify(s2[4])}\n\n")
+
+            sys.stdout.write("======== Sessions ========\n")
+            for i, pair in enumerate(pairs):
+                # i = str(i).zfill(len(str(int(s[0]))))
+                sys.stdout.write(f"       {prettify(pair[0])} ({prettify(e[i])})\n")
+                sys.stdout.write(f"       {prettify(pair[1])}\n")
+                try: sys.stdout.write(f"{prettify(e2[i])}\n")
+                except IndexError: pass
+            sys.stdout.write("==========================\n")
+
+        # stats ===========================================================================================
+        elif sys.argv[1] == 'stats':
+            report(filepath=None)
+
+        # start ===========================================================================================
+        elif sys.argv[1] == 'start':
+            now = datetime.datetime.now()
+            day = now.day
+            month = now.month
+            year = now.year
+
+            settings = load_settings()
+            timer_set = None
+            if timer_set is None:
+                timer_set = settings['default_timer']
+            else:
+                timer_set = int(timer_set)
+            target = prettify(_args2time(timer_set))
+
+            filepath = None
+            if filepath is None:
+                folder = Path('~/.work').expanduser()
+                filepath = folder/f'work_{year}.log'
+
+            try:
+                pairs, e, s = summary(day=day, month=month, filepath=filepath)
+            except FileNotFoundError:
+                build_logfile(folder=None, year=year)
+                pairs, e, s = summary(day=day, month=month, filepath=filepath)
+
+            _, e2, s2 = summary(mode='rest', day=day, month=month, filepath=filepath)
+
+
+            sys.stdout.write(f"======== {day}/{month}/{year} ========\n")
+            # sys.stdout.write(f"min:                {prettify(s[1])}\n")
+            # sys.stdout.write(f"max:                {prettify(s[2])}\n")
+            sys.stdout.write(f"average:            {prettify(s[3])}\n")
+            sys.stdout.write(f"total:              {prettify(s[4])}\n")
+            sys.stdout.write(f"Number of sessions: {s[0]}\n\n")
+
+            sys.stdout.write("========== Rests ==========\n")
+            # sys.stdout.write(f"min:                {prettify(s2[1])}\n")
+            # sys.stdout.write(f"max:                {prettify(s2[2])}\n")
+            sys.stdout.write(f"average:            {prettify(s2[3])}\n")
+            sys.stdout.write(f"total:              {prettify(s2[4])}\n\n")
+
+            sys.stdout.write("======== Sessions ========\n")
+            for i, pair in enumerate(pairs):
+                sys.stdout.write(f"       {prettify(pair[0])} ({prettify(e[i])})\n")
+                sys.stdout.write(f"       {prettify(pair[1])}\n")
+                try: sys.stdout.write(f"{prettify(e2[i])}\n")
+                except IndexError: pass
+            # sys.stdout.write("==========================\n")
+
+            time_start_str = time.strftime("%H%M", time.localtime())
+            try:
+                prev_rest = elapsed_time(pairs[-1][-1], time_start_str)
+                sys.stdout.write(f"{prettify(prev_rest)}\n")
+            except IndexError: pass
+            sys.stdout.write(f'       {prettify(time_start_str)}\n\n')
+
+            try:
+                time_start = time.time()
+                seconds_set = time2sec(timer_set)
+                timer_flag = False
+                timer_flag2 = False
+                timer_flag3 = False
+
+                while True:
+                    try:
+                        seconds = int(time.time() - time_start)
+                        string2show = prettify(sec2time(seconds), show_seconds=True)
+                        sys.stdout.write("\rTimer: {string2show} (target: {target}) >>> Press Esc to stop...".format(string2show=string2show, target=target))
+                        sys.stdout.flush()
+                        time.sleep(1)
+                        if seconds >= seconds_set/2 and timer_flag2 == False:
+                            _sayOutLoud(f'20 minutes')
+                            time.sleep(1)
+                            _sayOutLoud(f'half way done')
+                            timer_flag2 = True
+                        if seconds >= seconds_set/2 and timer_flag3 == False:
+                            _sayOutLoud(f'60 minutes')
+                            time.sleep(1)
+                            _sayOutLoud(f'Please stop working!')
+                            timer_flag3 = True
+
+                        if seconds >= seconds_set and timer_flag == False:
+                            _sayOutLoud(f'40 minutes')
+                            # _makeSound(duration=1, freq=440)
+                            time.sleep(1)
+                            # _makeSound(duration=1, freq=440)
+                            timer_flag = True
+                            _sayOutLoud(f'Take a break')
+                            # break
+                    except KeyboardInterrupt as e:
+                        break
+                # timer(40)
+                # while True:
+                #     sys.stdout.write("\rTimer: {string2show} (target: {target}) >>> Press Esc to stop...".format(string2show=string2show, target=target))
+                #     sys.stdout.flush()
+                #     time.sleep(1)
+                #     seconds = int(time.time() - timer_start)
+                #     string2show = prettify(sec2time(seconds), show_seconds=True)
+                #
+                #     if seconds >= minutes_set*60 and timer_flag == False:
+                #         makeSound(duration=1, freq=440)
+                #         time.sleep(1)
+                #         makeSound(duration=1, freq=440)
+                #         timer_flag = True
+            except KeyboardInterrupt:
+                pass
+
+            sys.stdout.write(f'\n\n====== Session summary ======\n')
+
+            time_end_str = time.strftime("%H%M", time.localtime())
+            append_session(start=time_start_str, end=time_end_str, day=day, month=month, filepath=filepath)
+            sys.stdout.write(f'Session saved at: {filepath}\n')
+
+            sys.stdout.write(f'Session started at: {prettify(time_start_str)}\n')
+            sys.stdout.write(f'Session ended at:   {prettify(time_end_str)}\n')
+            sys.stdout.write(f'Session lenght:     {string2show[:-3]}\n\n')
+
+            pairs, e, s = summary(day=day, month=month, filepath=filepath)
+            # sys.stdout.write(f"min:                {prettify(s[1])}\n")
+            # sys.stdout.write(f"max:                {prettify(s[2])}\n")
+            # sys.stdout.write(f"average:            {prettify(s[3])}\n")
+            sys.stdout.write(f"total:              {prettify(s[4])}\n\n")
+
+
+        else: # slapsed_time, timer
+            # print(f"{sys.argv[1]}("+','.join(sys.argv[2:])+')')
+            exec(f"{sys.argv[1]}("+','.join(sys.argv[2:])+')')

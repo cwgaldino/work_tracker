@@ -1,0 +1,120 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""timer
+
+    On linux (tested on ubuntu) it uses sox (``sudo apt install sox``).
+    On windows it uses the python package winsound (``pip install winsound``).
+
+    """
+
+# standard imports
+import time
+import sys
+
+# backpack
+import sys
+sys.path.append('/home/galdino/github/py-backpack')
+from backpack.intermanip import makeSound
+
+def timer_old(minutes_set):
+    time_start = time.time()
+    seconds = 0
+    minutes = 0
+
+    while True:
+        try:
+            sys.stdout.write("\r{minutes} Minutes {seconds} Seconds".format(minutes=minutes, seconds=seconds))
+            sys.stdout.flush()
+            time.sleep(1)
+            seconds = int(time.time() - time_start) - minutes * 60
+            if seconds >= 60:
+                minutes += 1
+                seconds = 0
+            if minutes >= minutes_set:
+                makeSound(duration=1, freq=440)
+                time.sleep(1)
+                makeSound(duration=1, freq=440)
+                break
+        except KeyboardInterrupt as e:
+            break
+
+def timer(minutes_set, hours_set=0, seconds_set=0):
+    seconds_set = minutes_set*60+hours_set*60*60+seconds_set
+    target = prettify(sec2time(seconds_set), show_seconds=True)
+
+    # initializing timer
+    timer_start = time.time()
+    time_start = time.strftime("%H%M", time.localtime())
+    string2show = '00:00:00'
+
+    timer_flag = False
+    # minutes = 59
+    try:
+        while True:
+            sys.stdout.write("\rTimer: {string2show} (target: {target}) >>> Press Esc to stop...".format(string2show=string2show, target=target))
+            sys.stdout.flush()
+            time.sleep(1)
+            seconds = int(time.time() - timer_start)
+            string2show = prettify(sec2time(seconds), show_seconds=True)
+
+            if seconds >= seconds_set and timer_flag == False:
+                makeSound(duration=1, freq=440)
+                time.sleep(1)
+                makeSound(duration=1, freq=440)
+                timer_flag = True
+    except KeyboardInterrupt:
+        pass
+
+
+def prettify(*args, show_seconds=False):
+    hours, minutes, seconds = _split_args(*args)
+    hours = str(hours).zfill(2)
+    minutes = str(minutes).zfill(2)
+    seconds = str(seconds).zfill(2)
+    if show_seconds:
+        return f'{hours}:{minutes}:{seconds}'
+    else:
+        return f'{hours}:{minutes}'
+
+def sec2time(seconds):
+    hours = seconds//(60*60)
+    minutes = seconds%(60*60)//60
+    seconds = seconds%(60*60)%60
+    return hours, minutes, seconds
+
+def _split_args(*args):
+    if len(args) == 1:
+        if type(args[0]) == str:
+            if len(args[0]) == 3:
+                string = 0+args[0]
+            else:
+                string = args[0]
+            hours = int(string[:2])
+            minutes = int(string[2:])
+        else:
+            hours = args[0][0]
+            minutes = args[0][1]
+        try:
+            seconds = args[0][2]
+        except IndexError:
+            seconds = 0
+    elif len(args) == 2:
+        hours = args[0]
+        minutes = args[1]
+        seconds = 0
+    elif len(args) == 3:
+        hours = args[0]
+        minutes = args[1]
+        seconds = args[2]
+    else:
+        warnings.warn(f'Wrong input: {args}')
+    return hours, minutes, seconds
+
+if __name__ == "__main__":
+
+    if len(sys.argv) == 2:
+        timer(int(sys.argv[1]))
+    elif len(sys.argv) == 3:
+        timer(int(sys.argv[1]), hours_set=int(sys.argv[2]))
+    else:
+        timer(int(sys.argv[1]), hours_set=int(sys.argv[2]), seconds_set=int(sys.argv[3]))
